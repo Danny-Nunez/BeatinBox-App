@@ -1,19 +1,17 @@
 {
   "expo": {
-    "name": "beatinbox-new-52",
+    "name": "beatinbox-app-v2",
     "sdkVersion": "52.0.0",
-    "slug": "beatinbox-new-52",
-    "owner": "admindn",
-    "version": "1.0.0",
+    "slug": "beatinbox-app-v2",
+    "owner": "topspeedwireless",
+    "version": "1.0.1",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "beatinbox",
     "extra": {
-      "eas": {
-        "projectId": "8944b3da-cb0e-4903-93a7-a354c4ce9c86"
-      }
+      "eas": {}
     },
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -59,7 +57,10 @@
       "permissions": [
         "INTERNET",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "NOTIFICATIONS",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
       ],
       "intentFilters": [
         {
@@ -99,7 +100,21 @@
       }
     },
     "plugins": [
-      "expo-asset"
-    ]
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff"
+        }
+      ]
+    ],
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#ffffff",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "New Notification"
+    }
   }
 }

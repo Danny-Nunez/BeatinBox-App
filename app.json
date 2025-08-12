@@ -1,0 +1,105 @@
+{
+  "expo": {
+    "name": "beatinbox-new-52",
+    "sdkVersion": "52.0.0",
+    "slug": "beatinbox-new-52",
+    "owner": "admindn",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "beatinbox",
+    "extra": {
+      "eas": {
+        "projectId": "8944b3da-cb0e-4903-93a7-a354c4ce9c86"
+      }
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.beatinbox.app",
+      "config": {
+        "googleSignIn": {
+          "reservedClientId": "com.googleusercontent.apps.163014883667-g0g2t71ei8aroin55ahhtcq491tk2ts8"
+        }
+      },
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "fetch",
+          "processing"
+        ],
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.163014883667-g0g2t71ei8aroin55ahhtcq491tk2ts8"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "beatinbox"
+            ]
+          }
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.beatinbox.app",
+      "permissions": [
+        "INTERNET",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.WAKE_LOCK"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "auth.expo.io"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "beatinbox"
+            }
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "config": {
+        "googleSignIn": {
+          "clientId": "163014883667-kptdg470n3p8ksg658skm1njmpi6fq40.apps.googleusercontent.com"
+        }
+      }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}

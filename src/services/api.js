@@ -24,16 +24,25 @@ const fetchTop100Songs = async () => {
     const response = await fetch(cloudinaryUrl);
     const data = await response.json();
     
-    // Extract and format the songs data
-    const songs = data.contents.sectionListRenderer.contents[0]
-      .musicAnalyticsSectionRenderer.content.trackTypes[0].trackViews
-      .map(track => ({
-        id: track.encryptedVideoId,
-        title: track.name,
-        artist: track.artists.map(artist => artist.name).join(', '),
-        thumbnail: track.thumbnail.thumbnails[0].url,
-        position: track.chartEntryMetadata.currentPosition
-      }));
+    // Extract and format the songs data with error handling
+    const songs = data.contents?.sectionListRenderer?.contents?.[0]
+      ?.musicAnalyticsSectionRenderer?.content?.trackTypes?.[0]?.trackViews
+      ?.map(track => {
+        try {
+          const thumbnailUrl = track.thumbnail?.thumbnails?.[0]?.url;
+          return {
+            id: track.encryptedVideoId || track.id,
+            title: track.name || 'Unknown Title',
+            artist: track.artists?.map(artist => artist.name).join(', ') || 'Unknown Artist',
+            thumbnail: thumbnailUrl ? `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(thumbnailUrl)}` : null,
+            position: track.chartEntryMetadata?.currentPosition || 0
+          };
+        } catch (trackError) {
+          console.error('Error processing track:', trackError, track);
+          return null;
+        }
+      })
+      ?.filter(Boolean) || [];
 
     return songs;
   } catch (error) {
@@ -47,16 +56,25 @@ const fetchTopArtists = async () => {
     const response = await fetch('https://www.beatinbox.com/api/popular-artists');
     const data = await response.json();
     
-    // Extract and format the artists data
-    const artists = data.contents.sectionListRenderer.contents[0]
-      .musicAnalyticsSectionRenderer.content.artists[0].artistViews
-      .map(artist => ({
-        id: artist.id,
-        name: artist.name,
-        viewCount: artist.viewCount,
-        thumbnail: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(artist.thumbnail.thumbnails[0].url)}`,
-        position: artist.chartEntryMetadata.currentPosition
-      }));
+    // Extract and format the artists data with error handling
+    const artists = data.contents?.sectionListRenderer?.contents?.[0]
+      ?.musicAnalyticsSectionRenderer?.content?.artists?.[0]?.artistViews
+      ?.map(artist => {
+        try {
+          const thumbnailUrl = artist.thumbnail?.thumbnails?.[0]?.url;
+          return {
+            id: artist.id,
+            name: artist.name || 'Unknown Artist',
+            viewCount: artist.viewCount || 0,
+            thumbnail: thumbnailUrl ? `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(thumbnailUrl)}` : null,
+            position: artist.chartEntryMetadata?.currentPosition || 0
+          };
+        } catch (artistError) {
+          console.error('Error processing artist:', artistError, artist);
+          return null;
+        }
+      })
+      ?.filter(Boolean) || [];
 
     return artists;
   } catch (error) {

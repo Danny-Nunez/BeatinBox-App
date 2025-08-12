@@ -11,7 +11,9 @@
     "newArchEnabled": true,
     "scheme": "beatinbox",
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "348365da-8efa-4589-83b1-548c4776db7a"
+      }
     },
     "splash": {
       "image": "./assets/splash-icon.png",

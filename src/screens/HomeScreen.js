@@ -312,9 +312,9 @@ const HomeScreen = ({ navigation }) => {
             style={styles.slider}
             contentContainerStyle={styles.sliderContent}
           >
-            {liveRadio.map((station) => (
+            {liveRadio.map((station, index) => (
               <TouchableOpacity 
-                key={`live-radio-${station.id}`} 
+                key={`live-radio-${station.id}-${index}`} 
                 style={styles.radioCard}
                 onPress={() => playSong({
                   id: station.id,
@@ -362,9 +362,9 @@ const HomeScreen = ({ navigation }) => {
             style={styles.slider}
             contentContainerStyle={styles.sliderContent}
           >
-            {liveNews.map((station) => (
+            {liveNews.map((station, index) => (
               <TouchableOpacity 
-                key={`live-news-${station.id}`} 
+                key={`live-news-${station.id}-${index}`} 
                 style={styles.radioCard}
                 onPress={() => playSong({
                   id: station.id,

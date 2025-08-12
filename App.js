@@ -329,7 +329,7 @@ const LibraryStack = () => (
     }}
   >
     <Stack.Screen 
-      name="Library" 
+      name="LibraryHome" 
       component={LibraryScreen}
       options={{ headerShown: false }}
     />

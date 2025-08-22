@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, Dimensions, Modal, ActivityIndicator } from 'react-native';
-import { fetchTop100Songs, fetchTopArtists, searchArtist } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, Dimensions, Modal, ActivityIndicator, Animated } from 'react-native';
+import LottieView from 'lottie-react-native';
+import { CacheManager, createCacheKey } from '../utils/cache';
+import { fetchTop100Songs, fetchTopArtists, fetchCommuteFeed, searchArtist } from '../services/api';
 import { usePlayer } from '../context/PlayerContext';
 import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,11 +30,24 @@ const HomeScreen = ({ navigation }) => {
   const [showLogin, setShowLogin] = useState(false);
   const [liveRadio, setLiveRadio] = useState([]);
   const [liveNews, setLiveNews] = useState([]);
+  const [musicItems, setMusicItems] = useState([]);
+  const [commuteFeed, setCommuteFeed] = useState([]);
   const [selectedSong, setSelectedSong] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [showMenu, setShowMenu] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [isLoadingArtist, setIsLoadingArtist] = useState(false);
+  const lottieRef = useRef(null);
+  
+
+  
+
+  
+
+  
+
+  
+
 
   const handleMenuPress = (song, event) => {
     const { pageX, pageY } = event.nativeEvent;
@@ -90,14 +105,59 @@ const HomeScreen = ({ navigation }) => {
     loadData();
   }, []);
 
+  // Reset Lottie animation when loading starts
+  useEffect(() => {
+    if (loading && lottieRef.current) {
+      lottieRef.current.reset();
+      lottieRef.current.play();
+    }
+  }, [loading]);
+
+
+
+
+
+
+
+  const fetchCachedData = async (url, cacheKey) => {
+    try {
+      // Try cache first
+      const cachedData = await CacheManager.get(cacheKey);
+      if (cachedData) {
+        console.log(`📦 Using cached data for ${cacheKey}`);
+        return cachedData;
+      }
+
+      // Fetch fresh data
+      console.log(`🌐 Fetching fresh data from ${url}`);
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      // Cache the result
+      await CacheManager.set(cacheKey, data);
+      return data;
+    } catch (error) {
+      // Try to return stale cache data if available
+      const staleData = await CacheManager.get(cacheKey);
+      if (staleData) {
+        console.log(`⚠️ Using stale cached data for ${cacheKey} due to error`);
+        return staleData;
+      }
+      throw error;
+    }
+  };
+
   const loadData = async () => {
     try {
-      const [songsData, artistsData, radioData, newsData] = await Promise.all([
+      const [songsData, artistsData, radioData, newsData, homeFeedData, commuteFeedData] = await Promise.all([
         fetchTop100Songs(),
         fetchTopArtists(),
-        fetch('https://www.beatinbox.com/api/music-live').then(res => res.json()),
-        fetch('https://www.beatinbox.com/api/news').then(res => res.json())
+        fetchCachedData('https://www.beatinbox.com/api/music-live', createCacheKey('music-live')),
+        fetchCachedData('https://www.beatinbox.com/api/news', createCacheKey('news')),
+        fetchCachedData('https://www.beatinbox.com/api/mobile-home-feed', createCacheKey('mobile-home-feed')),
+        fetchCommuteFeed()
       ]);
+      
       setSongs(songsData);
       setArtists(artistsData);
       setLiveRadio(Object.entries(radioData).map(([name, data]) => ({
@@ -108,6 +168,8 @@ const HomeScreen = ({ navigation }) => {
         name,
         ...data
       })));
+      setMusicItems(homeFeedData.musicItems || []);
+      setCommuteFeed(commuteFeedData || []);
       setError(null);
     } catch (error) {
       console.error('Error loading songs:', error);
@@ -126,11 +188,17 @@ const HomeScreen = ({ navigation }) => {
     return (
       <View style={[styles.container, { backgroundColor: '#000' }]}>
         <View style={styles.loadingContainer}>
-          <Image
-            source={{ uri: 'https://www.beatinbox.com/logo.png' }}
-            style={styles.loadingLogo}
-            resizeMode="contain"
-          />
+          <View style={[styles.logoContainer, { backgroundColor: 'transparent' }]}>
+            <LottieView
+              ref={lottieRef}
+              source={require('../../assets/icon.json')}
+              style={[styles.loadingLogo, { backgroundColor: 'transparent' }]}
+              autoPlay
+              loop
+              resizeMode="contain"
+              colorFilters={[]}
+            />
+          </View>
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </View>
@@ -179,14 +247,30 @@ const HomeScreen = ({ navigation }) => {
               }}
             >
               {user ? (
-                <Image
-                  source={{ 
-                    uri: user.image || 'https://www.beatinbox.com/default-user.png'
-                  }}
-                  style={styles.userImage}
-                />
+                <View style={styles.userImageContainer}>
+                  <LinearGradient
+                    colors={['#3B82F6', '#8B5CF6']} // Blue to purple gradient
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.userImageGradient}
+                  />
+                  <Image
+                    source={{ 
+                      uri: user.image || 'https://www.beatinbox.com/default-user.png'
+                    }}
+                    style={styles.userImage}
+                  />
+                </View>
               ) : (
-                <Ionicons name="person-circle-outline" size={32} color="white" />
+                <View style={styles.userImageContainer}>
+                  <LinearGradient
+                    colors={['#3B82F6', '#8B5CF6']} // Blue to purple gradient
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.userImageGradient}
+                  />
+                  <Ionicons name="person-circle-outline" size={32} color="white" />
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -401,6 +485,135 @@ const HomeScreen = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          {/* Commute Feed Sections */}
+          {commuteFeed.map((section, sectionIndex) => (
+            <View key={`commute-${sectionIndex}`} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+              </View>
+              
+              <ScrollView
+                horizontal={true}
+                showsHorizontalScrollIndicator={false}
+                style={styles.slider}
+                contentContainerStyle={styles.sliderContent}
+              >
+                {section.contents.map((playlist, index) => (
+                  <TouchableOpacity
+                    key={`commute-${sectionIndex}-${playlist.playlistId}-${index}`}
+                    style={styles.playlistCard}
+                    onPress={() => {
+                      if (playlist.playlistId.startsWith('MP')) {
+                        // Album/Single - navigate to album screen
+                        navigation.navigate('Album', {
+                          albumId: playlist.playlistId,
+                          albumName: playlist.title,
+                          albumImage: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(playlist.thumbnail)}`
+                        });
+                      } else {
+                        // Regular playlist - navigate to playlist detail
+                        navigation.navigate('PlaylistDetail', {
+                          playlistId: playlist.playlistId,
+                          title: playlist.title,
+                          thumbnail: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(playlist.thumbnail)}`,
+                          artists: playlist.artists
+                        });
+                      }
+                    }}
+                  >
+                    <View style={styles.playlistImageContainer}>
+                      <Image
+                        source={{ uri: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(playlist.thumbnail)}` }}
+                        style={styles.playlistImage}
+                      />
+                      <LinearGradient
+                        colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.8)']}
+                        locations={[0, 0.4, 0.9]}
+                        style={styles.playlistGradient}
+                      />
+                      <Text style={styles.playlistTitle} numberOfLines={2}>
+                        {playlist.title}
+                      </Text>
+                      <Text style={styles.playlistArtists} numberOfLines={1}>
+                        {playlist.artists}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ))}
+
+          {/* Music Items Sections */}
+          {musicItems.map((section, sectionIndex) => (
+            <View key={sectionIndex} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+              </View>
+              
+              <ScrollView
+                horizontal={true}
+                showsHorizontalScrollIndicator={false}
+                style={styles.slider}
+                contentContainerStyle={styles.sliderContent}
+              >
+                {section.contents.map((playlist, index) => (
+                  <TouchableOpacity
+                    key={`${sectionIndex}-${playlist.videoId || playlist.playlistId}-${index}`}
+                    style={styles.playlistCard}
+                    onPress={() => {
+                      if (playlist.videoId) {
+                        // Single song - play it
+                        playSong({
+                          id: playlist.videoId,
+                          title: playlist.title,
+                          artist: playlist.artists,
+                          thumbnail: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(playlist.thumbnail)}`
+                        });
+                      } else if (playlist.playlistId) {
+                        // Check if it's an album/single (starts with MP) or regular playlist
+                        if (playlist.playlistId.startsWith('MP')) {
+                          // Album/Single - navigate to album screen
+                          navigation.navigate('Album', {
+                            albumId: playlist.playlistId,
+                            albumName: playlist.title,
+                            albumImage: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(playlist.thumbnail)}`
+                          });
+                        } else {
+                          // Regular playlist - navigate to playlist detail
+                          navigation.navigate('PlaylistDetail', {
+                            playlistId: playlist.playlistId,
+                            title: playlist.title,
+                            thumbnail: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(playlist.thumbnail)}`,
+                            artists: playlist.artists
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    <View style={styles.playlistImageContainer}>
+                      <Image
+                        source={{ uri: `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(playlist.thumbnail)}` }}
+                        style={styles.playlistImage}
+                      />
+                      <LinearGradient
+                        colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.8)']}
+                        locations={[0, 0.4, 0.9]}
+                        style={styles.playlistGradient}
+                      />
+                      <Text style={styles.playlistTitle} numberOfLines={2}>
+                        {playlist.title}
+                      </Text>
+                      <Text style={styles.playlistArtists} numberOfLines={1}>
+                        {playlist.artists}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ))}
         </View>
       </ScrollView>
 
@@ -476,10 +689,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
+  logoContainer: {
+    position: 'relative',
+    marginBottom: 20,
+  },
+  logoContainer: {
+    marginBottom: 20,
+  },
+
   loadingLogo: {
     width: 150,
     height: 150,
-    marginBottom: 20,
   },
   loadingText: {
     color: '#fff',
@@ -781,10 +1001,72 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
   },
+  userImageContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userImageGradient: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 25,
+  },
   userImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 23,
+    zIndex: 1,
+  },
+  playlistCard: {
+    width: 160,
+    height: 200,
+    marginRight: 15,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  playlistImageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+  },
+  playlistImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
+  playlistGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 8,
+  },
+  playlistTitle: {
+    position: 'absolute',
+    bottom: 26,
+    left: 12,
+    right: 12,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  playlistArtists: {
+    position: 'absolute',
+    bottom: 8,
+    left: 12,
+    right: 12,
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   playingText: {
     color: '#ACBDFF',

@@ -88,6 +88,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = async (userData) => {
+    try {
+      setUser(userData);
+      // Optionally save to storage or send to backend
+      await authService.updateUserSession(userData);
+    } catch (error) {
+      console.error('Update user error:', error);
+      throw error;
+    }
+  };
+
   const handleGoogleSignIn = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -170,6 +181,7 @@ export const AuthProvider = ({ children }) => {
         login,
         signup,
         logout,
+        updateUser,
         resetPassword,
         handleGoogleSignIn,
         refreshUserData,

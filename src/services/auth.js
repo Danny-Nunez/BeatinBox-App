@@ -298,3 +298,17 @@ export const signOut = async () => {
     throw error;
   }
 };
+
+export const updateUserSession = async (userData) => {
+  try {
+    // Update the stored user data
+    const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+    if (sessionToken) {
+      const sessionData = { user: userData, token: sessionToken };
+      await AsyncStorage.setItem('@user_session', JSON.stringify(sessionData));
+    }
+  } catch (error) {
+    console.error('Update user session error:', error);
+    // Don't throw here, just log the error
+  }
+};

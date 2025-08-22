@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CacheManager, createCacheKey } from '../utils/cache';
 
 const SESSION_TOKEN_KEY = '@auth_session_token';
 const PLAYLISTS_CACHE_KEY = '@playlists_cache';
@@ -19,7 +20,17 @@ const fetchLatestCloudinaryUrl = async () => {
 };
 
 const fetchTop100Songs = async () => {
+  const cacheKey = createCacheKey('top100songs');
+  
   try {
+    // Try to get from cache first
+    const cachedData = await CacheManager.get(cacheKey);
+    if (cachedData) {
+      console.log('📦 Using cached top 100 songs');
+      return cachedData;
+    }
+
+    console.log('🌐 Fetching fresh top 100 songs from API');
     const cloudinaryUrl = await fetchLatestCloudinaryUrl();
     const response = await fetch(cloudinaryUrl);
     const data = await response.json();
@@ -44,21 +55,42 @@ const fetchTop100Songs = async () => {
       })
       ?.filter(Boolean) || [];
 
+    // Cache the result
+    await CacheManager.set(cacheKey, songs);
     return songs;
   } catch (error) {
     console.error('Error fetching top 100 songs:', error);
+    
+    // Try to return stale cache data if available
+    const staleData = await CacheManager.get(cacheKey);
+    if (staleData) {
+      console.log('⚠️ Using stale cached data due to API error');
+      return staleData;
+    }
+    
     throw error;
   }
 };
 
 const fetchTopArtists = async () => {
+  const cacheKey = createCacheKey('topartists');
+  
   try {
+    // Try to get from cache first
+    const cachedData = await CacheManager.get(cacheKey);
+    if (cachedData) {
+      console.log('📦 Using cached top artists');
+      return cachedData;
+    }
+
+    console.log('🌐 Fetching fresh top artists from API');
     const response = await fetch('https://www.beatinbox.com/api/popular-artists');
     const data = await response.json();
     
-    // Extract and format the artists data with error handling
+    // Extract and format the artists data with error handling, limited to top 20
     const artists = data.contents?.sectionListRenderer?.contents?.[0]
       ?.musicAnalyticsSectionRenderer?.content?.artists?.[0]?.artistViews
+      ?.slice(0, 20) // Limit to top 20 artists
       ?.map(artist => {
         try {
           const thumbnailUrl = artist.thumbnail?.thumbnails?.[0]?.url;
@@ -76,10 +108,55 @@ const fetchTopArtists = async () => {
       })
       ?.filter(Boolean) || [];
 
+    // Cache the result
+    await CacheManager.set(cacheKey, artists);
     return artists;
   } catch (error) {
     console.error('Error fetching top artists:', error);
+    
+    // Try to return stale cache data if available
+    const staleData = await CacheManager.get(cacheKey);
+    if (staleData) {
+      console.log('⚠️ Using stale cached artists due to API error');
+      return staleData;
+    }
+    
     throw error;
+  }
+};
+
+const fetchCommuteFeed = async () => {
+  const cacheKey = createCacheKey('commute-feed');
+  
+  try {
+    // Try to get from cache first
+    const cachedData = await CacheManager.get(cacheKey);
+    if (cachedData) {
+      console.log('📦 Using cached commute feed');
+      return cachedData;
+    }
+
+    console.log('🌐 Fetching fresh commute feed from API');
+    const response = await fetch('https://www.beatinbox.com/api/get-mobile-commute-feed-url');
+    const data = await response.json();
+    
+    // Extract the music items from the API response
+    const musicItems = data?.data?.musicItems || [];
+
+    // Cache the result
+    await CacheManager.set(cacheKey, musicItems);
+    return musicItems;
+  } catch (error) {
+    console.error('Error fetching commute feed:', error);
+    
+    // Try to return stale cache data if available
+    const staleData = await CacheManager.get(cacheKey);
+    if (staleData) {
+      console.log('⚠️ Using stale cached commute feed due to API error');
+      return staleData;
+    }
+    
+    return []; // Return empty array on error instead of throwing
   }
 };
 
@@ -352,6 +429,38 @@ const createPlaylist = async (name) => {
   }
 };
 
+const deletePlaylist = async (playlistId) => {
+  try {
+    const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
+    const response = await fetch(`https://expo-backend-bi5x.onrender.com/mobile/playlists/${playlistId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': sessionToken
+      }
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      try {
+        const data = JSON.parse(text);
+        throw new Error(data.error || `Server error: ${response.status}`);
+      } catch (e) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting playlist:', error);
+    throw error instanceof Error ? error : new Error(error?.message || 'Unknown error occurred');
+  }
+};
+
 const checkSongInPlaylist = async (playlistId, videoId) => {
   try {
     const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
@@ -398,6 +507,7 @@ const checkSongInPlaylist = async (playlistId, videoId) => {
 export { 
   fetchTop100Songs,
   fetchTopArtists,
+  fetchCommuteFeed,
   createOrUpdateUser,
   getPlaylists,
   getCachedPlaylists,
@@ -405,5 +515,6 @@ export {
   removeSongFromPlaylist,
   searchArtist,
   createPlaylist,
+  deletePlaylist,
   checkSongInPlaylist
 };

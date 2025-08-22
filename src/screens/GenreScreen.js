@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator, Modal, Animated, Image } from 'react-native';
+import { CacheManager, createCacheKey } from '../utils/cache';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlayer } from '../context/PlayerContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +29,7 @@ const GenreScreen = ({ navigation, route }) => {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [isLoadingArtist, setIsLoadingArtist] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const lottieRef = useRef(null);
 
   useEffect(() => {
     if (!loading) {
@@ -78,6 +80,14 @@ const GenreScreen = ({ navigation, route }) => {
     loadData();
   }, []);
 
+  // Reset Lottie animation when loading starts
+  useEffect(() => {
+    if (loading && lottieRef.current) {
+      lottieRef.current.reset();
+      lottieRef.current.play();
+    }
+  }, [loading]);
+
   const getGenreEndpoint = (genre) => {
     switch (genre) {
       case 'pop':
@@ -107,8 +117,23 @@ const GenreScreen = ({ navigation, route }) => {
     try {
       const genre = route.params?.genre || 'pop';
       const endpoint = getGenreEndpoint(genre);
-      const response = await fetch(endpoint);
-      const data = await response.json();
+      const cacheKey = createCacheKey('genre', { genre });
+      
+      // Try cache first
+      let data;
+      const cachedData = await CacheManager.get(cacheKey);
+      if (cachedData) {
+        console.log(`📦 Using cached data for genre: ${genre}`);
+        data = cachedData;
+      } else {
+        console.log(`🌐 Fetching fresh data for genre: ${genre}`);
+        const response = await fetch(endpoint);
+        data = await response.json();
+        
+        // Cache the result
+        await CacheManager.set(cacheKey, data);
+      }
+      
       if (data.success && data.data.musicItems) {
         const songsSection = data.data.musicItems.find(item => item.title === "Songs");
         const playlistSections = data.data.musicItems.filter(item => item.title !== "Songs");
@@ -129,7 +154,32 @@ const GenreScreen = ({ navigation, route }) => {
       setError(null);
     } catch (error) {
       console.error('Error loading songs:', error);
-      setError('Unable to load songs. Please try again later.');
+      
+      // Try to return stale cache data if available
+      const genre = route.params?.genre || 'pop';
+      const cacheKey = createCacheKey('genre', { genre });
+      const staleData = await CacheManager.get(cacheKey);
+      if (staleData && staleData.success && staleData.data.musicItems) {
+        console.log(`⚠️ Using stale cached data for genre: ${genre} due to error`);
+        const songsSection = staleData.data.musicItems.find(item => item.title === "Songs");
+        const playlistSections = staleData.data.musicItems.filter(item => item.title !== "Songs");
+        
+        if (songsSection) {
+          const formattedSongs = songsSection.contents.map(song => ({
+            id: song.videoId,
+            title: song.title,
+            artist: song.artists,
+            thumbnail: song.thumbnail,
+            playlistId: song.playlistId
+          }));
+          setSongs(formattedSongs);
+        }
+        
+        setPlaylists(playlistSections);
+        setError(null);
+      } else {
+        setError('Unable to load songs. Please try again later.');
+      }
     } finally {
       setLoading(false);
     }
@@ -145,13 +195,21 @@ const GenreScreen = ({ navigation, route }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <LottieView
-          source={{ uri: 'https://assets2.lottiefiles.com/packages/lf20_p8bfn5to.json' }}
-          autoPlay
-          loop
-          style={{ width: 100, height: 100 }}
-        />
+      <View style={[styles.container, { backgroundColor: '#000' }]}>
+        <View style={styles.loadingContainer}>
+          <View style={[styles.logoContainer, { backgroundColor: 'transparent' }]}>
+            <LottieView
+              ref={lottieRef}
+              source={require('../../assets/icon.json')}
+              style={[styles.loadingLogo, { backgroundColor: 'transparent' }]}
+              autoPlay
+              loop
+              resizeMode="contain"
+              colorFilters={[]}
+            />
+          </View>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
       </View>
     );
   }
@@ -176,7 +234,8 @@ const GenreScreen = ({ navigation, route }) => {
 
   return (
     <LinearGradient colors={['#000', '#1a1a1a']} style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.backButton} 
@@ -205,7 +264,10 @@ const GenreScreen = ({ navigation, route }) => {
             </Text>
         </View>
 
-        <ScrollView style={styles.scrollView}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+        >
           <View style={[styles.content, !songs?.length && { marginBottom: 0 }]}>
             {songs && songs.length > 0 && (
               <View style={styles.sectionHeader}>
@@ -371,6 +433,7 @@ const GenreScreen = ({ navigation, route }) => {
             </View>
           ))}
         </ScrollView>
+        </View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -383,8 +446,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
-  playlistScroll: {
+  logoContainer: {
     marginBottom: 20,
+  },
+  loadingLogo: {
+    width: 150,
+    height: 150,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  playlistScroll: {
+    marginBottom: 0,
   },
   playlistScrollContent: {
     paddingHorizontal: 15,
@@ -437,9 +512,12 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    paddingBottom: 120,
+    paddingBottom: 0,
   },
   centerContent: {
     flex: 1,
@@ -482,15 +560,21 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollViewContent: {
+    paddingBottom: 140,
+  },
   content: {
     paddingHorizontal: 15,
-    marginBottom: 20,
+    marginBottom: 0,
+  },
+  section: {
+    marginBottom: 0,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
     marginTop: 15,
   },
   sectionTitleSongs: {
@@ -520,7 +604,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   slider: {
-    marginBottom: 20,
+    marginBottom: 0,
   },
   sliderContent: {
     paddingHorizontal: 0,

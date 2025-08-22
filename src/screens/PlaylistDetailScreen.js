@@ -105,21 +105,28 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Header */}
         <View style={styles.header}>
           <Image
-            source={{ uri: thumbnail }}
+            source={{ 
+              uri: thumbnail || 'https://www.beatinbox.com/default-playlist.png'
+            }}
             style={styles.headerImage}
             resizeMode="cover"
           />
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.8)']}
+            colors={['transparent', 'rgba(0, 0, 0, 0.96)']}
             style={styles.gradient}
           />
           <View style={styles.headerInfo}>
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.artists}>{artists}</Text>
+            <Text style={styles.songCount}>
+              {playlist?.videos?.length || 0} {playlist?.videos?.length === 1 ? 'song' : 'songs'}
+            </Text>
           </View>
         </View>
 
@@ -146,8 +153,8 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
                   style={styles.songThumbnail}
                 />
                 <View style={styles.songInfo}>
-                  <Text style={styles.songTitle} numberOfLines={2}>{video.title}</Text>
-                  <Text style={styles.channelName}>{video.channel.name}</Text>
+                  <Text style={styles.songTitle} numberOfLines={1} ellipsizeMode="tail">{video.title}</Text>
+                  <Text style={styles.channelName} numberOfLines={1} ellipsizeMode="tail">{video.channel.name}</Text>
                 </View>
                 {/* <Text style={styles.duration}>{formatDuration(video.duration)}</Text> */}
               </View>
@@ -260,7 +267,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-    paddingBottom: 140,
   },
   loadingContainer: {
     flex: 1,
@@ -281,6 +287,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 140,
+  },
   header: {
     height: 300,
     position: 'relative',
@@ -294,7 +303,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 160,
+    height:300,
   },
   headerInfo: {
     position: 'absolute',
@@ -307,6 +316,15 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  songCount: {
+    color: '#fff',
+    fontSize: 16,
+    opacity: 0.9,
+    fontWeight: '500',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -335,7 +353,8 @@ const styles = StyleSheet.create({
   songInfo: {
     flex: 1,
     marginLeft: 15,
-    marginRight: 10,
+    marginRight: 50, // Increased margin to account for menu button
+    minWidth: 0, // Allows text to shrink properly
   },
   songTitle: {
     color: '#fff',

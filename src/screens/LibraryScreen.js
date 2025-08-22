@@ -11,40 +11,138 @@ import {
   ActivityIndicator,
   ToastAndroid,
   Platform,
-  Alert
+  Alert,
+  Modal,
+  Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { getPlaylists, getCachedPlaylists } from '../services/api';
+import { getPlaylists, getCachedPlaylists, deletePlaylist } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlaylistSkeleton from '../components/PlaylistSkeleton';
+import CreatePlaylistModal from '../components/CreatePlaylistModal';
 
-const PlaylistCard = ({ playlist, onPress }) => {
+const SwipeablePlaylistCard = ({ playlist, onPress, onDelete }) => {
+  const translateX = new Animated.Value(0);
+  const scale = new Animated.Value(1);
+  const deleteOpacity = new Animated.Value(0);
   const firstSong = playlist.songs[0]?.song;
-  
+
+  const resetAnimation = () => {
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: 0,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: false,
+      }),
+      Animated.timing(deleteOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+      Animated.timing(scale, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const onGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX } }],
+    { useNativeDriver: false }
+  );
+
+  const onHandlerStateChange = (event) => {
+    const { state, translationX } = event.nativeEvent;
+
+    if (state === State.END) {
+      const swipeThreshold = -120; // Full delete threshold
+
+      if (translationX < swipeThreshold) {
+        // Trigger delete - pass reset function to handle cancel
+        onDelete(playlist, resetAnimation);
+      } else {
+        // Snap back to original position
+        resetAnimation();
+      }
+    }
+  };
+
+  // Update delete background opacity based on swipe progress
+  React.useEffect(() => {
+    const listener = translateX.addListener(({ value }) => {
+      const progress = Math.min(Math.abs(value) / 60, 1); // Normalize to 0-1
+      deleteOpacity.setValue(progress);
+    });
+
+    return () => {
+      translateX.removeListener(listener);
+    };
+  }, []);
+
   return (
-    <TouchableOpacity style={styles.card} onPress={() => onPress(playlist)}>
-      <View style={styles.cardContent}>
-        <Image
-          source={{ 
-            uri: firstSong?.thumbnail 
-              ? `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(firstSong.thumbnail)}`
-              : 'https://www.beatinbox.com/defaultcover.png'
-          }}
-          style={styles.thumbnail}
-          resizeMode="cover"
-        />
-        <View style={styles.textContainer}>
-          <Text style={styles.playlistName} numberOfLines={1}>
-            {playlist.name}
-          </Text>
-          <Text style={styles.songCount}>
-            {playlist.songs.length} {playlist.songs.length === 1 ? 'song' : 'songs'}
-          </Text>
+    <View style={styles.swipeContainer}>
+      {/* Delete background */}
+      <Animated.View 
+        style={[
+          styles.deleteBackground,
+          {
+            opacity: deleteOpacity,
+          }
+        ]}
+      >
+        <View style={styles.deleteContent}>
+          <Ionicons name="trash" size={24} color="#fff" />
+          <Text style={styles.deleteText}>Delete</Text>
         </View>
-        <Ionicons name="chevron-forward" size={24} color="#666" />
-      </View>
-    </TouchableOpacity>
+      </Animated.View>
+
+      {/* Swipeable card */}
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onHandlerStateChange}
+        activeOffsetX={[-10, 0]}
+      >
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              transform: [{ translateX }, { scale }],
+              zIndex: 2,
+            },
+          ]}
+        >
+          <TouchableOpacity 
+            style={styles.cardContent}
+            onPress={() => onPress(playlist)}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={{ 
+                uri: firstSong?.thumbnail 
+                  ? `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(firstSong.thumbnail)}`
+                  : 'https://www.beatinbox.com/defaultcover.png'
+              }}
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
+            <View style={styles.textContainer}>
+              <Text style={styles.playlistName} numberOfLines={1}>
+                {playlist.name}
+              </Text>
+              <Text style={styles.songCount}>
+                {playlist.songs.length} {playlist.songs.length === 1 ? 'song' : 'songs'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#666" />
+          </TouchableOpacity>
+        </Animated.View>
+      </PanGestureHandler>
+    </View>
   );
 };
 
@@ -54,12 +152,22 @@ const LibraryScreen = ({ navigation }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [error, setError] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [skipCache, setSkipCache] = useState(false);
 
   const showError = (message) => {
     if (Platform.OS === 'android') {
       ToastAndroid.show(message, ToastAndroid.SHORT);
     } else {
       Alert.alert('Error', message);
+    }
+  };
+
+  const showSuccess = (message) => {
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(message, ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Success', message);
     }
   };
 
@@ -95,6 +203,13 @@ const LibraryScreen = ({ navigation }) => {
     useCallback(() => {
       if (!authLoading && user) {
         const loadData = async () => {
+          // Skip cache if we just deleted an item to prevent showing stale data
+          if (skipCache) {
+            setSkipCache(false); // Reset the flag
+            fetchPlaylists(true);
+            return;
+          }
+          
           // Try to load cached data first
           const cachedData = await getCachedPlaylists();
           if (cachedData) {
@@ -110,7 +225,7 @@ const LibraryScreen = ({ navigation }) => {
         
         loadData();
       }
-    }, [user?.email, authLoading])
+    }, [user?.email, authLoading, skipCache])
   );
 
   const handleRefresh = () => {
@@ -120,6 +235,73 @@ const LibraryScreen = ({ navigation }) => {
   const handleRetry = () => {
     setError(null);
     fetchPlaylists(true);
+  };
+
+  const handleCreatePlaylistSuccess = () => {
+    // Refresh playlists after creating a new one
+    fetchPlaylists(true);
+  };
+
+  const handleDeletePlaylist = async (playlist, resetAnimation) => {
+    try {
+      Alert.alert(
+        'Delete Playlist',
+        `Are you sure you want to delete "${playlist.name}"? This action cannot be undone.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              // Reset animation when user cancels
+              if (resetAnimation) {
+                resetAnimation();
+              }
+            },
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deletePlaylist(playlist.id);
+                // Remove from local state immediately for better UX
+                const updatedPlaylists = playlists.filter(p => p.id !== playlist.id);
+                setPlaylists(updatedPlaylists);
+                
+                // Update the cache with the new playlist data
+                try {
+                  await AsyncStorage.setItem('@playlists_cache', JSON.stringify(updatedPlaylists));
+                  await AsyncStorage.setItem('@playlists_timestamp', Date.now().toString());
+                } catch (cacheError) {
+                  console.log('Cache update error:', cacheError);
+                }
+                
+                // Set flag to skip cache on next load to prevent showing deleted item
+                setSkipCache(true);
+                
+                showSuccess('Playlist deleted successfully');
+              } catch (error) {
+                console.error('Error deleting playlist:', error);
+                showError('Failed to delete playlist. Please try again.');
+                // Refresh to restore the playlist in the list if delete failed
+                fetchPlaylists(true);
+                // Reset animation on error
+                if (resetAnimation) {
+                  resetAnimation();
+                }
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error in delete handler:', error);
+      showError('An error occurred. Please try again.');
+      // Reset animation on error
+      if (resetAnimation) {
+        resetAnimation();
+      }
+    }
   };
 
   if (!user) {
@@ -196,13 +378,20 @@ const LibraryScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Library</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => setShowCreateModal(true)}
+        >
+          <Ionicons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
       </View>
       <FlatList
         data={playlists}
         renderItem={({ item }) => (
-          <PlaylistCard 
+          <SwipeablePlaylistCard 
             playlist={item} 
             onPress={(playlist) => navigation.navigate('Playlist', { playlist })}
+            onDelete={handleDeletePlaylist}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -210,6 +399,18 @@ const LibraryScreen = ({ navigation }) => {
         refreshing={isRefreshing}
         onRefresh={handleRefresh}
       />
+      
+      <Modal
+        visible={showCreateModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCreateModal(false)}
+      >
+        <CreatePlaylistModal
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={handleCreatePlaylistSuccess}
+        />
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -218,14 +419,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-    paddingBottom: 140,
   },
   header: {
-    height: 60,
+    height: 80,
     backgroundColor: '#000',
     borderBottomWidth: 0,
     borderBottomColor: '#222',
-    justifyContent: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     zIndex: 1,
   },
@@ -234,19 +436,54 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
+  addButton: {
+    padding: 4,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  swipeContainer: {
+    position: 'relative',
+    marginBottom: 4,
+  },
+  deleteBackground: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    left: 0,
+    backgroundColor: '#ff4444',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingRight: 20,
+    zIndex: 1,
+  },
+  deleteContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+    marginLeft: 8,
+  },
   listContainer: {
-    paddingBottom: 160, // Add extra padding for player bar
+    paddingBottom: 150, // Reduced padding for player bar
+    paddingHorizontal: 12,
   },
   card: {
     paddingHorizontal: 0,
-    paddingVertical: 1,
+    paddingVertical: 0,
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 8,
-    padding: 12,
+    padding: 10,
+    paddingLeft: 12,
     paddingRight: 16,
   },
   thumbnail: {
@@ -275,7 +512,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    paddingBottom: 100,
+   
   },
   emptyText: {
     color: '#fff',

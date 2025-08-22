@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import ProgressBar from './ProgressBar';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -22,7 +23,8 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
   const [controlsVisible, setControlsVisible] = useState(false);
   const controlsTimeout = useRef(null);
   const translateY = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -219,6 +221,63 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
     return () => clearInterval(interval);
   }, [playing, getCurrentTime]);
 
+    const onDragGestureEvent = Animated.event(
+    [{ nativeEvent: { translationY: dragY } }],
+    { useNativeDriver: true }
+  );
+
+  const onDragHandlerStateChange = useCallback((event) => {
+    if (event.nativeEvent.state === State.ACTIVE) {
+      // Add subtle opacity change during drag
+      const { translationY } = event.nativeEvent;
+      const dragProgress = Math.min(translationY / 100, 1);
+      const newOpacity = 1 - (dragProgress * 0.3); // Reduce opacity by up to 30%
+      opacity.setValue(newOpacity);
+    } else if (event.nativeEvent.state === State.END) {
+      const { translationY } = event.nativeEvent;
+      
+      // If dragged down more than 100px, minimize
+      if (translationY > 200) {
+        // Set translateY to current drag position before resetting dragY
+        translateY.setValue(translationY);
+        dragY.setValue(0);
+        
+        // Slide down the expanded view
+        Animated.timing(translateY, {
+          toValue: SCREEN_HEIGHT,
+          duration: 200,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.ease)
+        }).start(() => {
+          // After slide down, show minimized and slide it up
+          setMinimized(true);
+          translateY.setValue(SCREEN_HEIGHT);
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.ease)
+          }).start();
+        });
+      } else {
+        // Snap back to expanded position
+        Animated.parallel([
+          Animated.spring(dragY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 8
+          }),
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true
+          })
+        ]).start();
+      }
+    }
+  }, [translateY, opacity, dragY]);
+
   const toggleMinimize = useCallback(async () => {
     if (isFullscreen) {
       await toggleFullscreen();
@@ -226,36 +285,47 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
     }
 
     if (minimized) {
+      // Start from bottom with opacity 0
       translateY.setValue(SCREEN_HEIGHT);
-      opacity.setValue(1);
+      opacity.setValue(0);
       setMinimized(false);
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.ease)
-      }).start();
-    } else {
-      setMinimized(true);
-      opacity.setValue(1);
+      
+      // Animate up while fading in
       Animated.parallel([
         Animated.timing(translateY, {
-          toValue: SCREEN_HEIGHT,
-          duration: 300,
+          toValue: 0,
+          duration: 350,
           useNativeDriver: true,
-          easing: Easing.in(Easing.ease)
+          easing: Easing.out(Easing.ease)
         }),
         Animated.timing(opacity, {
-          toValue: 0,
-          duration: 300,
+          toValue: 1,
+          duration: 400,
           useNativeDriver: true,
-          easing: Easing.in(Easing.ease)
+          easing: Easing.out(Easing.ease)
         })
-      ]).start(() => {
-        translateY.setValue(0);
+      ]).start();
+          } else {
+        setMinimized(true);
         opacity.setValue(1);
-      });
-    }
+        Animated.parallel([
+          Animated.timing(translateY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 300,
+            useNativeDriver: true,
+            easing: Easing.in(Easing.ease)
+          }),
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+            easing: Easing.in(Easing.ease)
+          })
+        ]).start(() => {
+          translateY.setValue(0);
+          opacity.setValue(1);
+        });
+      }
   }, [minimized, translateY, opacity, isFullscreen, toggleFullscreen]);
 
   useEffect(() => {
@@ -370,18 +440,19 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
         styles.container, 
         minimized ? styles.minimized : styles.expanded,
         { 
-          transform: [{ translateY }],
+          transform: [{ translateY: Animated.add(translateY, dragY) }],
           opacity: minimized ? 1 : opacity
         }
       ]}
     >
-      <View style={[styles.videoContainer, { 
+      <Animated.View style={[styles.videoContainer, { 
         position: 'absolute',
         top: minimized ? -1000 : 160,
         left: 0,
         right: 0,
         height: 300,
         zIndex: minimized ? -1 : 1,
+        opacity: minimized ? 0 : opacity,
       }]}>
         <View style={{ position: 'relative', width: '100%', height: '100%' }}>
           <View style={StyleSheet.absoluteFill}>
@@ -402,7 +473,7 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
       {minimized && (
         <LinearGradient
           colors={[color, 'black']}
@@ -412,13 +483,15 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
         />
       )}
       {!minimized && (
-        <View style={styles.expandedContainer}>
-          <TouchableOpacity 
-            style={styles.dragIndicatorContainer}
-            onPress={toggleMinimize}
+        <Animated.View style={[styles.expandedContainer, { opacity: opacity }]}>
+          <PanGestureHandler
+            onGestureEvent={onDragGestureEvent}
+            onHandlerStateChange={onDragHandlerStateChange}
           >
-            <Ionicons name="chevron-down" size={24} color="white" style={styles.chevronIcon} />
-          </TouchableOpacity>
+            <Animated.View style={styles.dragIndicatorContainer}>
+              <Ionicons name="chevron-down" size={24} color="white" style={styles.chevronIcon} />
+            </Animated.View>
+          </PanGestureHandler>
 
           <View style={styles.expandedInfo}>
             <Text style={styles.expandedTitle}>{currentSong?.title || 'No song playing'}</Text>
@@ -458,7 +531,7 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
               <Ionicons name="play-skip-forward" size={35} color="white" />
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       {minimized && (
@@ -565,6 +638,9 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     paddingBottom: 20,
+    // Add visual feedback for dragging
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   chevronIcon: {
     opacity: 0.8,

@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PlayerProvider } from './src/context/PlayerContext';
 import { AuthProvider } from './src/context/AuthContext';
+import { CacheManager } from './src/utils/cache';
 
 // Screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -347,11 +349,26 @@ const LibraryStack = () => (
 export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Clean expired cache on app start
+  useEffect(() => {
+    const cleanupCache = async () => {
+      try {
+        await CacheManager.clearExpired();
+        console.log('🧹 Cache cleanup completed');
+      } catch (error) {
+        console.error('Cache cleanup error:', error);
+      }
+    };
+
+    cleanupCache();
+  }, []);
+
   return (
-    <AuthProvider>
-      <PlayerProvider>
-      <SafeAreaProvider>
-        <NavigationContainer>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <PlayerProvider>
+        <SafeAreaProvider>
+          <NavigationContainer>
           <View style={styles.container}>
             <Stack.Navigator 
               screenOptions={{ 
@@ -426,6 +443,7 @@ export default function App() {
       </SafeAreaProvider>
       </PlayerProvider>
     </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

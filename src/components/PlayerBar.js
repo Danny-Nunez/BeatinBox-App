@@ -25,11 +25,30 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
   const translateY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const titleOpacity = useRef(new Animated.Value(1)).current;
+  const artistScrollX = useRef(new Animated.Value(0)).current;
+  const artistOpacity = useRef(new Animated.Value(1)).current;
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const playerRef = useRef(null);
   const lastTimeRef = useRef(0);
+  const scrollActiveRef = useRef(false);
+  const artistScrollActiveRef = useRef(false);
+  const scrollTimerRef = useRef(null);
+  const artistScrollTimerRef = useRef(null);
+  const scrollLoopTimerRef = useRef(null);
+  const artistScrollLoopTimerRef = useRef(null);
+  const currentScrollAnimationRef = useRef(null);
+  const currentOpacityAnimationRef = useRef(null);
+  const currentArtistScrollAnimationRef = useRef(null);
+  const currentArtistOpacityAnimationRef = useRef(null);
+  const isLoopRunningRef = useRef(false);
+  const isArtistLoopRunningRef = useRef(false);
+  const isFirstScrollRef = useRef(true);
+  const isFirstArtistScrollRef = useRef(true);
+  const lastSongTitleRef = useRef('');
   const [screenDimensions, setScreenDimensions] = useState(() => ({
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height
@@ -52,6 +71,399 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
+
+  const startTitleScroll = useCallback(() => {
+    if (!currentSong?.title || currentSong.title.length < 30) {
+      console.log('Title too short, no scroll needed. Length:', currentSong?.title?.length || 0);
+      return;
+    }
+    
+    // Check if this is the same song title (prevent multiple calls)
+    if (lastSongTitleRef.current === currentSong.title) {
+      console.log('Same song title, skipping startTitleScroll');
+      return;
+    }
+    
+    console.log('Starting title scroll for:', currentSong.title);
+    console.log('Title length:', currentSong.title.length);
+    
+    // Set scroll as active and reset first scroll flag for new songs
+    scrollActiveRef.current = true;
+    lastSongTitleRef.current = currentSong.title; // Store current song title
+    
+    // Don't reset isFirstScrollRef here - let the first loop complete first
+    
+    // Calculate scroll distance to show the complete title
+    const estimatedCharWidth = 14; // Approximate pixels per character
+    const containerWidth = 300; // Approximate container width
+    const textWidth = currentSong.title.length * estimatedCharWidth;
+    
+    // Start text just outside left edge, scroll to show complete title
+    const startPosition = 0; // Start from left edge (just outside)
+    const scrollDistance = textWidth; // Scroll the full width of the text
+    
+    console.log('Text width:', textWidth, 'Container width:', containerWidth, 'Start position:', startPosition, 'Scroll distance:', scrollDistance);
+    
+    // Reset to start position (left edge)
+    scrollX.setValue(startPosition);
+    
+    // Create smooth continuous loop animation with fade effects
+    const createScrollLoop = () => {
+      // Check if scrolling should still be active
+      if (!scrollActiveRef.current) {
+        console.log('Scrolling stopped, not creating loop');
+        return;
+      }
+      
+      // Prevent multiple loops from running simultaneously
+      if (isLoopRunningRef.current) {
+        console.log('Loop already running, skipping');
+        return;
+      }
+      
+      isLoopRunningRef.current = true;
+      console.log('Starting new scroll loop');
+      
+      // Stop any existing animations and reset both scroll and opacity
+      if (currentScrollAnimationRef.current) {
+        currentScrollAnimationRef.current.stop();
+        currentScrollAnimationRef.current = null;
+      }
+      if (currentOpacityAnimationRef.current) {
+        currentOpacityAnimationRef.current.stop();
+        currentOpacityAnimationRef.current = null;
+      }
+      
+      scrollX.stopAnimation();
+      titleOpacity.stopAnimation();
+      scrollX.setValue(startPosition);
+      
+      // Only fade in on the second loop (after first scroll completes)
+      if (isFirstScrollRef.current) {
+        titleOpacity.setValue(1); // Start with opacity 1 (visible) for first scroll
+        console.log('First scroll: Start with opacity 1 (no fade-in)');
+        startScrollAnimation();
+      } else {
+        // This is the second loop (after first scroll completed)
+        titleOpacity.setValue(0); // Start with opacity 0 for fade-in effect
+        console.log('Second loop: Reset opacity to 0 for fade-in effect');
+        
+        // Create fade-in animation
+        const fadeInAnimation = Animated.timing(titleOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease)
+        });
+        
+        currentOpacityAnimationRef.current = fadeInAnimation;
+        
+        fadeInAnimation.start(() => {
+          console.log('Fade in completed, starting scroll delay');
+          startScrollAnimation();
+        });
+      }
+      
+      function startScrollAnimation() {
+        // Wait a moment before starting to scroll so user can read the beginning
+        setTimeout(() => {
+          if (!scrollActiveRef.current) return;
+          
+          console.log('Starting scroll animation');
+          // Start scrolling - scroll from left to show complete title
+          const scrollAnimation = Animated.timing(scrollX, {
+            toValue: -scrollDistance,
+            duration: 12000, // Increased from 8000ms to 12000ms (slower)
+            useNativeDriver: true,
+            easing: Easing.linear
+          });
+          
+          currentScrollAnimationRef.current = scrollAnimation;
+          
+          scrollAnimation.start(() => {
+            console.log('Scroll animation completed');
+            // Check again before fade out
+            if (!scrollActiveRef.current) return;
+            
+            // Wait for scroll to complete, then show end text, then fade out
+            scrollLoopTimerRef.current = setTimeout(() => {
+              if (!scrollActiveRef.current) return;
+              
+              console.log('Starting fade out animation');
+              const fadeOutAnimation = Animated.timing(titleOpacity, {
+                toValue: 0,
+                duration: 500,
+                useNativeDriver: true,
+                easing: Easing.in(Easing.ease)
+              });
+              
+              currentOpacityAnimationRef.current = fadeOutAnimation;
+              
+              fadeOutAnimation.start(() => {
+                console.log('Fade out completed, looping back');
+                // Check again before looping
+                if (!scrollActiveRef.current) return;
+                
+                // Mark that this is no longer the first scroll
+                isFirstScrollRef.current = false;
+                
+                // Reset the loop running flag
+                isLoopRunningRef.current = false;
+                
+                // Loop back to createScrollLoop (don't reset scrollX here)
+                scrollLoopTimerRef.current = setTimeout(() => {
+                  // If this was the first scroll, add a fade-in effect when restarting
+                  if (isFirstScrollRef.current) {
+                    console.log('First scroll completed, restarting with fade-in effect');
+                    // Reset opacity to 0 so it can fade in on restart
+                    titleOpacity.setValue(0);
+                    // Small delay to ensure fade-in is visible
+                    setTimeout(() => {
+                      createScrollLoop();
+                    }, 100);
+                  } else {
+                    createScrollLoop();
+                  }
+                }, 0);
+              });
+            }, 0);
+          });
+        }, 5000);
+      }
+    };
+    
+    // Start the loop
+    scrollTimerRef.current = setTimeout(createScrollLoop, 2000);
+  }, [currentSong?.title, scrollX, titleOpacity]);
+
+  const startArtistScroll = useCallback(() => {
+    if (!currentSong?.artist || currentSong.artist.length < 25) {
+      console.log('Artist too short, no scroll needed. Length:', currentSong?.artist?.length || 0);
+      return;
+    }
+    
+    console.log('Starting artist scroll for:', currentSong.artist);
+    console.log('Artist length:', currentSong.artist.length);
+    
+    // Set artist scroll as active
+    artistScrollActiveRef.current = true;
+    
+    // Calculate scroll distance to show the complete artist name
+    const estimatedCharWidth = 12; // Slightly smaller for artist text
+    const containerWidth = 300; // Same container width
+    const textWidth = currentSong.artist.length * estimatedCharWidth;
+    
+    // Start text just outside left edge, scroll to show complete artist name
+    const startPosition = 0; // Start from left edge
+    const scrollDistance = textWidth; // Scroll the full width of the text
+    
+    console.log('Artist text width:', textWidth, 'Container width:', containerWidth, 'Start position:', startPosition, 'Scroll distance:', scrollDistance);
+    
+    // Reset to start position (left edge)
+    artistScrollX.setValue(startPosition);
+    
+    // Create smooth continuous loop animation with fade effects
+    const createArtistScrollLoop = () => {
+      // Check if scrolling should still be active
+      if (!artistScrollActiveRef.current) {
+        console.log('Artist scrolling stopped, not creating loop');
+        return;
+      }
+      
+      // Prevent multiple loops from running simultaneously
+      if (isArtistLoopRunningRef.current) {
+        console.log('Artist loop already running, skipping');
+        return;
+      }
+      
+      isArtistLoopRunningRef.current = true;
+      console.log('Starting new artist scroll loop');
+      
+      // Stop any existing animations and reset both scroll and opacity
+      if (currentArtistScrollAnimationRef.current) {
+        currentArtistScrollAnimationRef.current.stop();
+        currentArtistScrollAnimationRef.current = null;
+      }
+      if (currentArtistOpacityAnimationRef.current) {
+        currentArtistOpacityAnimationRef.current.stop();
+        currentArtistOpacityAnimationRef.current = null;
+      }
+      
+      artistScrollX.stopAnimation();
+      artistOpacity.stopAnimation();
+      artistScrollX.setValue(startPosition);
+      
+      // Only fade in on the second loop (after first scroll completes)
+      if (isFirstArtistScrollRef.current) {
+        artistOpacity.setValue(1); // Start with opacity 1 (visible) for first scroll
+        console.log('First artist scroll: Start with opacity 1 (no fade-in)');
+        startArtistScrollAnimation();
+      } else {
+        // This is the second loop (after first scroll completed)
+        artistOpacity.setValue(0); // Start with opacity 0 for fade-in effect
+        console.log('Second artist loop: Reset opacity to 0 for fade-in effect');
+        
+        // Create fade-in animation
+        const fadeInAnimation = Animated.timing(artistOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease)
+        });
+        
+        currentArtistOpacityAnimationRef.current = fadeInAnimation;
+        
+        fadeInAnimation.start(() => {
+          console.log('Artist fade in completed, starting scroll delay');
+          startArtistScrollAnimation();
+        });
+      }
+      
+      function startArtistScrollAnimation() {
+        // Wait a moment before starting to scroll so user can read the beginning
+        setTimeout(() => {
+          if (!artistScrollActiveRef.current) return;
+          
+          console.log('Starting artist scroll animation');
+          // Start scrolling - scroll from left to show complete artist name
+          const scrollAnimation = Animated.timing(artistScrollX, {
+            toValue: -scrollDistance,
+            duration: 15000, // Increased from 10000ms to 15000ms (slower)
+            useNativeDriver: true,
+            easing: Easing.linear
+          });
+          
+          currentArtistScrollAnimationRef.current = scrollAnimation;
+          
+          scrollAnimation.start(() => {
+            console.log('Artist scroll animation completed');
+            // Check again before fade out
+            if (!artistScrollActiveRef.current) return;
+            
+            // Wait for scroll to complete, then show end text, then fade out
+            artistScrollLoopTimerRef.current = setTimeout(() => {
+              if (!artistScrollActiveRef.current) return;
+              
+              console.log('Starting artist fade out animation');
+              const fadeOutAnimation = Animated.timing(artistOpacity, {
+                toValue: 0,
+                duration: 500,
+                useNativeDriver: true,
+                easing: Easing.in(Easing.ease)
+              });
+              
+              currentArtistOpacityAnimationRef.current = fadeOutAnimation;
+              
+              fadeOutAnimation.start(() => {
+                console.log('Artist fade out completed, looping back');
+                // Check again before looping
+                if (!artistScrollActiveRef.current) return;
+                
+                // Mark that this is no longer the first artist scroll
+                isFirstArtistScrollRef.current = false;
+                
+                // Reset the loop running flag
+                isArtistLoopRunningRef.current = false;
+                
+                // Loop back to createArtistScrollLoop
+                artistScrollLoopTimerRef.current = setTimeout(createArtistScrollLoop, 0);
+              });
+            }, 0);
+          });
+        }, 5000); // Wait 3 seconds before starting to scroll
+      }
+    };
+    
+    // Start the artist scroll loop
+    artistScrollTimerRef.current = setTimeout(createArtistScrollLoop, 500);
+  }, [currentSong?.artist, artistScrollX, artistOpacity]);
+
+  // Add cleanup function to stop animations
+  const stopTitleScroll = useCallback(() => {
+    // Set scroll as inactive
+    scrollActiveRef.current = false;
+    artistScrollActiveRef.current = false;
+    
+    // Reset loop running flag
+    isLoopRunningRef.current = false;
+    isArtistLoopRunningRef.current = false;
+    
+    // Reset last song title to allow new songs to start
+    lastSongTitleRef.current = '';
+    
+    // Reset artist scroll flags
+    isFirstArtistScrollRef.current = true;
+    
+    // Stop stored animation references
+    if (currentScrollAnimationRef.current) {
+      currentScrollAnimationRef.current.stop();
+      currentScrollAnimationRef.current = null;
+    }
+    if (currentOpacityAnimationRef.current) {
+      currentOpacityAnimationRef.current.stop();
+      currentOpacityAnimationRef.current = null;
+    }
+    if (currentArtistScrollAnimationRef.current) {
+      currentArtistScrollAnimationRef.current.stop();
+      currentArtistScrollAnimationRef.current = null;
+    }
+    if (currentArtistOpacityAnimationRef.current) {
+      currentArtistOpacityAnimationRef.current.stop();
+      currentArtistOpacityAnimationRef.current = null;
+    }
+    
+    // Stop animations
+    scrollX.stopAnimation();
+    titleOpacity.stopAnimation();
+    artistScrollX.stopAnimation();
+    artistOpacity.stopAnimation();
+    
+    // Reset values
+    scrollX.setValue(0);
+    titleOpacity.setValue(1);
+    artistScrollX.setValue(0);
+    artistOpacity.setValue(1);
+    
+    // Clear all timers
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = null;
+    }
+    
+    if (artistScrollTimerRef.current) {
+      clearTimeout(artistScrollTimerRef.current);
+      artistScrollTimerRef.current = null;
+    }
+    
+    if (scrollLoopTimerRef.current) {
+      clearTimeout(scrollLoopTimerRef.current);
+      scrollLoopTimerRef.current = null;
+    }
+    
+    if (artistScrollLoopTimerRef.current) {
+      clearTimeout(artistScrollLoopTimerRef.current);
+      artistScrollLoopTimerRef.current = null;
+    }
+    
+    console.log('Title and artist scroll stopped and cleaned up');
+  }, [scrollX, titleOpacity, artistScrollX, artistOpacity]);
+
+  useEffect(() => {
+    // Stop any existing animations first
+    stopTitleScroll();
+    
+    // Start new scroll animation after a short delay
+    const timer = setTimeout(() => {
+      startTitleScroll();
+      startArtistScroll(); // Also start artist scrolling
+    }, 500);
+    
+    // Cleanup function to stop animations when component unmounts or song changes
+    return () => {
+      clearTimeout(timer);
+      stopTitleScroll();
+    };
+  }, [currentSong?.title, startTitleScroll, startArtistScroll, stopTitleScroll]);
 
   const toggleFullscreen = useCallback(async () => {
     try {
@@ -132,8 +544,12 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
   useEffect(() => {
     if (currentSong) {
       setPlaying(true);
+      // Start title scroll animation after a delay
+      setTimeout(() => {
+        startTitleScroll();
+      }, 2000);
     }
-  }, [currentSong]);
+  }, [currentSong, startTitleScroll]);
 
   const onStateChange = useCallback((state) => {
     console.log('Player state changed:', state);
@@ -250,14 +666,17 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
           easing: Easing.in(Easing.ease)
         }).start(() => {
           // After slide down, show minimized and slide it up
-          setMinimized(true);
           translateY.setValue(SCREEN_HEIGHT);
-          Animated.timing(translateY, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-            easing: Easing.out(Easing.ease)
-          }).start();
+          setMinimized(true);
+          // Small delay to ensure minimized state is set before animation
+          setTimeout(() => {
+            Animated.timing(translateY, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+              easing: Easing.out(Easing.ease)
+            }).start();
+          }, 10);
         });
       } else {
         // Snap back to expanded position
@@ -489,13 +908,42 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
             onHandlerStateChange={onDragHandlerStateChange}
           >
             <Animated.View style={styles.dragIndicatorContainer}>
-              <Ionicons name="chevron-down" size={24} color="white" style={styles.chevronIcon} />
+              <View style={styles.dragLine} />
             </Animated.View>
           </PanGestureHandler>
 
           <View style={styles.expandedInfo}>
-            <Text style={styles.expandedTitle}>{currentSong?.title || 'No song playing'}</Text>
-            <Text style={styles.expandedArtist}>{currentSong?.artist || ''}</Text>
+            
+            <View style={styles.titleContainer}>
+              <Animated.Text 
+                style={[
+                  styles.expandedTitle,
+                  { 
+                    transform: [{ translateX: scrollX }],
+                    position: 'absolute',
+                    left: 0,
+                    opacity: titleOpacity,
+                  }
+                ]}
+              >
+                {currentSong?.title || 'No song playing'}
+              </Animated.Text>
+            </View>
+            <View style={styles.artistContainer}>
+              <Animated.Text 
+                style={[
+                  styles.expandedArtist,
+                  { 
+                    transform: [{ translateX: artistScrollX }],
+                    position: 'absolute',
+                    left: 0,
+                    opacity: artistOpacity,
+                  }
+                ]}
+              >
+                {currentSong?.artist || 'No artist'}
+              </Animated.Text>
+            </View>
           </View>
 
           <View style={styles.progressContainer}>
@@ -556,7 +1004,7 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
               {currentSong?.title || 'No song playing'}
             </Text>
             <Text style={styles.artist} numberOfLines={1} ellipsizeMode="tail">
-              {currentSong?.artist || ''}
+              {currentSong?.artist || 'No artist'}
             </Text>
             </View>
           </TouchableOpacity>
@@ -639,11 +1087,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     paddingBottom: 20,
     // Add visual feedback for dragging
-    borderBottomWidth: 2,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  
   },
-  chevronIcon: {
-    opacity: 0.8,
+  dragLine: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 2,
+    marginBottom: 10,
   },
   videoContainer: {
     backgroundColor: 'black',
@@ -734,21 +1185,40 @@ const styles = StyleSheet.create({
   },
   expandedInfo: {
     marginTop: 360,
-    alignItems: 'center',
-    paddingHorizontal: 10,
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    overflow: 'hidden',
+  },
+  titleContainer: {
+    overflow: 'hidden',
+    height: 32,
+    backgroundColor: 'transparent',
+    position: 'relative',
+    width: '100%',
   },
   expandedTitle: {
     fontSize: 24,
     fontWeight: '600',
     color: 'white',
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: 8,
+    flexShrink: 0,
+    minWidth: '200%',
   },
   expandedArtist: {
     fontSize: 18,
     color: '#999',
-    textAlign: 'center',
-    marginBottom: 0,
+    textAlign: 'left',
+    marginBottom: 8,
+    flexShrink: 0,
+    minWidth: '200%',
+  },
+  artistContainer: {
+    overflow: 'hidden',
+    height: 24, // Adjust height for artist text
+    backgroundColor: 'transparent',
+    position: 'relative',
+    width: '100%',
   },
   progressContainer: {
     marginTop: 40,

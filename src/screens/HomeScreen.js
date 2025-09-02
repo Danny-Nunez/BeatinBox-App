@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, Dimensions, Modal, ActivityIndicator, Animated } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { CacheManager, createCacheKey } from '../utils/cache';
-import { fetchTop100Songs, fetchTopArtists, fetchCommuteFeed, searchArtist } from '../services/api';
+import { fetchTop100Songs, fetchTopArtists, fetchCommuteFeed, searchArtist, getFavoriteArtists } from '../services/api';
 import { usePlayer } from '../context/PlayerContext';
 import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,6 +25,7 @@ const HomeScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [songs, setSongs] = useState([]);
   const [artists, setArtists] = useState([]);
+  const [favoriteArtists, setFavoriteArtists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
@@ -105,6 +106,36 @@ const HomeScreen = ({ navigation }) => {
     loadData();
   }, []);
 
+  // Load favorite artists when user changes
+  useEffect(() => {
+    // Only load favorites when user is fully loaded with an ID
+    if (user && user.id) {
+      loadFavoriteArtists();
+    } else if (user === null) {
+      // User is explicitly null (not logged in)
+      loadFavoriteArtists();
+    }
+    // If user is undefined, it means context is still loading, so do nothing
+  }, [user]);
+
+  // Set loading to false after both data and favorites are loaded
+  useEffect(() => {
+    if (!loading && (favoriteArtists.length > 0 || artists.length > 0)) {
+      // We have either favorites or top artists, so we can stop loading
+    }
+  }, [loading, favoriteArtists.length, artists.length]);
+
+  // Refresh favorite artists when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (user) {
+        loadFavoriteArtists();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, user]);
+
   // Reset Lottie animation when loading starts
   useEffect(() => {
     if (loading && lottieRef.current) {
@@ -124,12 +155,10 @@ const HomeScreen = ({ navigation }) => {
       // Try cache first
       const cachedData = await CacheManager.get(cacheKey);
       if (cachedData) {
-        console.log(`📦 Using cached data for ${cacheKey}`);
         return cachedData;
       }
 
       // Fetch fresh data
-      console.log(`🌐 Fetching fresh data from ${url}`);
       const response = await fetch(url);
       const data = await response.json();
       
@@ -140,7 +169,6 @@ const HomeScreen = ({ navigation }) => {
       // Try to return stale cache data if available
       const staleData = await CacheManager.get(cacheKey);
       if (staleData) {
-        console.log(`⚠️ Using stale cached data for ${cacheKey} due to error`);
         return staleData;
       }
       throw error;
@@ -149,9 +177,8 @@ const HomeScreen = ({ navigation }) => {
 
   const loadData = async () => {
     try {
-      const [songsData, artistsData, radioData, newsData, homeFeedData, commuteFeedData] = await Promise.all([
+      const [songsData, radioData, newsData, homeFeedData, commuteFeedData] = await Promise.all([
         fetchTop100Songs(),
-        fetchTopArtists(),
         fetchCachedData('https://www.beatinbox.com/api/music-live', createCacheKey('music-live')),
         fetchCachedData('https://www.beatinbox.com/api/news', createCacheKey('news')),
         fetchCachedData('https://www.beatinbox.com/api/mobile-home-feed', createCacheKey('mobile-home-feed')),
@@ -159,7 +186,6 @@ const HomeScreen = ({ navigation }) => {
       ]);
       
       setSongs(songsData);
-      setArtists(artistsData);
       setLiveRadio(Object.entries(radioData).map(([name, data]) => ({
         name,
         ...data
@@ -178,6 +204,51 @@ const HomeScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+
+  // Load favorite artists when user is logged in, or top artists as fallback
+  const loadFavoriteArtists = async () => {
+    // Check if user context is still loading (user might be null initially)
+    if (!user) {
+      return;
+    }
+    
+    if (user.id) {
+      try {
+        const favorites = await getFavoriteArtists();
+        
+        if (favorites && favorites.length > 0) {
+          // User has favorites, use those
+          setFavoriteArtists(favorites);
+          setArtists([]); // Clear top artists since we don't need them
+        } else {
+          // User has no favorites, load top artists as fallback
+          const topArtists = await fetchTopArtists();
+          setArtists(topArtists);
+          setFavoriteArtists([]);
+        }
+      } catch (error) {
+        // If favorites fail to load, load top artists as fallback
+        try {
+          const topArtists = await fetchTopArtists();
+          setArtists(topArtists);
+          setFavoriteArtists([]);
+        } catch (fallbackError) {
+          // Fallback failed, keep empty state
+        }
+      }
+    } else {
+      setFavoriteArtists([]);
+      // Load top artists for users without ID
+      try {
+        const topArtists = await fetchTopArtists();
+        setArtists(topArtists);
+      } catch (error) {
+        // Failed to load top artists
+      }
+    }
+  };
+
+
 
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? 'Good morning' : 
@@ -276,7 +347,11 @@ const HomeScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Top Artists</Text>
+            <Text style={styles.sectionTitle}>
+              {favoriteArtists.length > 0 ? 'Your Favorite Artists' : 'Top Artists'}
+            </Text>
+
+
           </View>
           <ScrollView
             horizontal={true}
@@ -286,37 +361,71 @@ const HomeScreen = ({ navigation }) => {
             style={styles.slider}
             contentContainerStyle={styles.sliderContent}
           >
-            {artists.map((artist) => (
-              <TouchableOpacity 
-                key={artist.id} 
-                style={styles.artistCard}
-                onPress={() => navigation.navigate('Artist', {
-                  artistId: artist.id,
-                  artistName: artist.name
-                })}
-              >
-                <View style={styles.artistImageContainer}>
-                  <Image
-                    source={{ uri: artist.thumbnail }}
-                    style={styles.artistImage}
-                  />
-                  <LinearGradient
-                    colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.8)']}
-                    locations={[0, 0.4, 0.9]}
-                    style={styles.artistGradient}
-                  />
-                  <Text style={styles.artistRank}>
-                    {artist.position}
-                  </Text>
-                  <Text style={styles.artistName} numberOfLines={1}>
-                    {artist.name}
-                  </Text>
-                  <Text style={styles.artistViews} numberOfLines={1}>
-                  {formatViews(artist.viewCount)} Views
-                </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            {(() => {
+              const artistsToShow = favoriteArtists.length > 0 ? favoriteArtists : artists;
+              const isUsingFavorites = favoriteArtists.length > 0;
+              
+
+              
+              return artistsToShow.map((artist, index) => {
+              // Handle both favorite artists and top artists data structures
+              const isFavoriteArtist = favoriteArtists.length > 0;
+              const artistId = isFavoriteArtist ? artist.browseId : artist.id;
+              const artistName = artist.name;
+              const artistThumbnail = isFavoriteArtist 
+                ? (artist.thumbnails && (Array.isArray(artist.thumbnails) ? artist.thumbnails[0]?.url : artist.thumbnails.url))
+                : artist.thumbnail;
+              
+              // Use proxy for favorite artist images, direct URL for top artists
+              // For favorite artists, try to get the largest available thumbnail (w240-h240)
+              let imageUri;
+              if (isFavoriteArtist && artistThumbnail) {
+                // Replace w60-h60 with w240-h240 for better quality
+                const enhancedThumbnail = artistThumbnail.replace(/w\d+-h\d+/, 'w240-h240');
+                imageUri = `https://www.beatinbox.com/api/proxy-image?url=${encodeURIComponent(enhancedThumbnail)}`;
+              } else {
+                imageUri = artistThumbnail;
+              }
+
+
+
+              return (
+                <TouchableOpacity 
+                  key={artistId} 
+                  style={styles.artistCard}
+                  onPress={() => navigation.navigate('Artist', {
+                    artistId: artistId,
+                    artistName: artistName
+                  })}
+                >
+                  <View style={styles.artistImageContainer}>
+                    <Image
+                      source={{ uri: imageUri }}
+                      style={styles.artistImage}
+                    />
+                    <LinearGradient
+                      colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.8)']}
+                      locations={[0, 0.4, 0.9]}
+                      style={styles.artistGradient}
+                    />
+                    {!isFavoriteArtist && (
+                      <Text style={styles.artistRank}>
+                        {artist.position}
+                      </Text>
+                    )}
+                    <Text style={styles.artistName} numberOfLines={1}>
+                      {artistName}
+                    </Text>
+                    {!isFavoriteArtist && (
+                      <Text style={styles.artistViews} numberOfLines={1}>
+                        {formatViews(artist.viewCount)} Views
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            });
+          })()}
           </ScrollView>
 
           <View style={styles.sectionHeader}>
@@ -754,6 +863,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     marginTop: 15,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   sectionTitle: {
     fontSize: 24,

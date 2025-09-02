@@ -22,6 +22,7 @@ import ArtistScreen from './src/screens/ArtistScreen';
 import AlbumScreen from './src/screens/AlbumScreen';
 import PlaylistDetailScreen from './src/screens/PlaylistDetailScreen';
 import GenreScreen from './src/screens/GenreScreen';
+import AddArtistScreen from './src/screens/AddArtistScreen';
 
 // Components
 import PlayerBar from './src/components/PlayerBar';
@@ -405,6 +406,40 @@ export default function App() {
                       <Ionicons name="chevron-down" size={24} color="#fff" />
                     </TouchableOpacity>
                   ),
+                })}
+              />
+              <Stack.Screen 
+                name="Artist" 
+                component={ArtistScreen}
+                options={({ navigation }) => ({
+                  headerShown: true,
+                  headerStyle: {
+                    backgroundColor: '#000',
+                  },
+                  headerTintColor: '#fff',
+                  headerTitle: '',
+                  presentation: 'modal',
+                  animation: 'slide_from_right',
+                  contentStyle: {
+                    backgroundColor: '#000'
+                  },
+                  headerLeft: () => (
+                    <TouchableOpacity onPress={() => navigation.goBack()}>
+                      <Ionicons name="chevron-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                  ),
+                })}
+              />
+              <Stack.Screen 
+                name="AddArtist" 
+                component={AddArtistScreen}
+                options={({ navigation }) => ({
+                  headerShown: false,
+                  presentation: 'modal',
+                  animation: 'slide_from_right',
+                  contentStyle: {
+                    backgroundColor: '#000'
+                  },
                 })}
               />
               <Stack.Screen 

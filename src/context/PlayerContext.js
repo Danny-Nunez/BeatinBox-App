@@ -20,8 +20,15 @@ export const PlayerProvider = ({ children }) => {
   const playSong = (song, songList) => {
     setIsPlaying(true);
     if (songList) {
-      setPlaylist(songList);
-      setCurrentIndex(songList.findIndex(s => s.id === song.id));
+      // Ensure the playlist data has the correct structure
+      const formattedPlaylist = songList.map(item => ({
+        id: item.id,
+        title: item.title,
+        artist: item.artist || item.channel?.name || '',
+        thumbnail: item.thumbnail
+      }));
+      setPlaylist(formattedPlaylist);
+      setCurrentIndex(formattedPlaylist.findIndex(s => s.id === song.id));
     } else if (!playlist.length) {
       setPlaylist([song]);
       setCurrentIndex(0);
@@ -43,7 +50,7 @@ export const PlayerProvider = ({ children }) => {
       setCurrentSong({
         id: nextSong.id,
         title: nextSong.title,
-        artist: nextSong.artist,
+        artist: nextSong.artist || nextSong.channel?.name || '',
         thumbnail: nextSong.thumbnail
       });
     }
@@ -56,7 +63,7 @@ export const PlayerProvider = ({ children }) => {
       setCurrentSong({
         id: prevSong.id,
         title: prevSong.title,
-        artist: prevSong.artist,
+        artist: prevSong.artist || prevSong.channel?.name || '',
         thumbnail: prevSong.thumbnail
       });
     }

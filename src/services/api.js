@@ -504,6 +504,206 @@ const checkSongInPlaylist = async (playlistId, videoId) => {
   }
 };
 
+const getFavoriteArtists = async () => {
+  try {
+    const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
+    const response = await fetch('https://expo-backend-bi5x.onrender.com/mobile/users/favorite-artists', {
+      headers: {
+        'Accept': 'application/json',
+        'X-Session-Token': sessionToken
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Extract the content array from the response
+    if (data.success && data.content && Array.isArray(data.content)) {
+      return data.content;
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error('Error fetching favorite artists:', error);
+    throw error instanceof Error ? error : new Error(error?.message || 'Unknown error occurred');
+  }
+};
+
+const addFavoriteArtist = async (artistData) => {
+  try {
+    const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
+    // Use the batch endpoint with a single artist since the single endpoint doesn't exist
+    const requestBody = {
+      artists: [{
+        browseId: artistData.browseId,
+        name: artistData.name,
+        thumbnails: artistData.thumbnails?.[0] || null // Take first thumbnail or null
+      }]
+    };
+    
+    console.log('addFavoriteArtist - Request details:', {
+      url: 'https://expo-backend-bi5x.onrender.com/mobile/users/favorite-artists/batch',
+      method: 'POST',
+      sessionToken: sessionToken ? 'Present' : 'Missing',
+      requestBody: JSON.stringify(requestBody, null, 2)
+    });
+
+    const response = await fetch('https://expo-backend-bi5x.onrender.com/mobile/users/favorite-artists/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Session-Token': sessionToken
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    console.log('addFavoriteArtist - Response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('addFavoriteArtist - Backend error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorText: errorText
+      });
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.error || `Server error: ${response.status} - ${errorText}`);
+      } catch (e) {
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error adding favorite artist:', error);
+    throw error instanceof Error ? error : new Error(error?.message || 'Unknown error occurred');
+  }
+};
+
+const addFavoriteArtistsBatch = async (artistsArray) => {
+  try {
+    const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
+    // Format the data according to backend expectations for batch
+    const requestBody = {
+      artists: artistsArray.map(artist => ({
+        browseId: artist.browseId,
+        name: artist.name,
+        thumbnails: artist.thumbnails?.[0] || null
+      }))
+    };
+    
+    console.log('addFavoriteArtistsBatch - Request details:', {
+      url: 'https://expo-backend-bi5x.onrender.com/mobile/users/favorite-artists/batch',
+      method: 'POST',
+      sessionToken: sessionToken ? 'Present' : 'Missing',
+      requestBody: JSON.stringify(requestBody, null, 2)
+    });
+
+    const response = await fetch('https://expo-backend-bi5x.onrender.com/mobile/users/favorite-artists/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Session-Token': sessionToken
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    console.log('addFavoriteArtistsBatch - Response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('addFavoriteArtistsBatch - Backend error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorText: errorText
+      });
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.error || `Server error: ${response.status} - ${errorText}`);
+      } catch (e) {
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error adding favorite artists batch:', error);
+    throw error instanceof Error ? error : new Error(error?.message || 'Unknown error occurred');
+  }
+};
+
+const removeFavoriteArtist = async (browseId) => {
+  try {
+    const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
+    const response = await fetch(`https://expo-backend-bi5x.onrender.com/mobile/users/favorite-artists/${browseId}`, {
+      method: 'DELETE',
+      headers: {
+        'Accept': 'application/json',
+        'X-Session-Token': sessionToken
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error removing favorite artist:', error);
+    throw error instanceof Error ? error : new Error(error?.message || 'Unknown error occurred');
+  }
+};
+
+const checkFavoriteArtistStatus = async (browseId) => {
+  try {
+    const sessionToken = await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
+    const response = await fetch(`https://expo-backend-bi5x.onrender.com/mobile/users/favorite-artists/${browseId}/status`, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Session-Token': sessionToken
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.isFavorited;
+  } catch (error) {
+    console.error('Error checking favorite artist status:', error);
+    throw error instanceof Error ? error : new Error(error?.message || 'Unknown error occurred');
+  }
+};
+
 export { 
   fetchTop100Songs,
   fetchTopArtists,
@@ -516,5 +716,10 @@ export {
   searchArtist,
   createPlaylist,
   deletePlaylist,
-  checkSongInPlaylist
+  checkSongInPlaylist,
+  getFavoriteArtists,
+  addFavoriteArtist,
+  addFavoriteArtistsBatch,
+  removeFavoriteArtist,
+  checkFavoriteArtistStatus
 };

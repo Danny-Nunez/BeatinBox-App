@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PlayerProvider } from './src/context/PlayerContext';
@@ -370,7 +370,7 @@ export default function App() {
         <PlayerProvider>
         <SafeAreaProvider>
           <NavigationContainer>
-          <View style={styles.container}>
+          <View style={[styles.container, { backgroundColor: 'blue' }]}>
             <Stack.Navigator 
               screenOptions={{ 
                 headerShown: false,
@@ -492,11 +492,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 0,
+    zIndex: 1000,
+    elevation: 1000,
   },
   playerFullscreen: {
     bottom: 0,
     top: 0,
-    zIndex: 0,
+    zIndex: 1000,
+    elevation: 1000,
   },
 });

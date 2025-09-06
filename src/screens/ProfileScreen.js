@@ -7,12 +7,30 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { CommonActions } from '@react-navigation/native';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, logout, updateUser } = useAuth();
   const [playlistCount, setPlaylistCount] = useState(0);
   const [favoriteArtists, setFavoriteArtists] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Auto-dismiss Profile screen if user is not logged in
+  useEffect(() => {
+    if (!user) {
+      console.log('🚪 ProfileScreen: User not logged in, dismissing screen');
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'MainTabs' }],
+          })
+        );
+      }
+    }
+  }, [user, navigation]);
   const [currentUser, setCurrentUser] = useState(user);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
 
@@ -324,7 +342,21 @@ const ProfileScreen = ({ navigation }) => {
     setIsMenuVisible(false);
     try {
       await logout();
-      navigation.navigate('MainTabs');
+      // Properly dismiss the Profile screen and reset navigation stack
+      setTimeout(() => {
+        // First try to go back (dismiss modal)
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          // Fallback: reset navigation stack to MainTabs
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'MainTabs' }],
+            })
+          );
+        }
+      }, 100);
     } catch (error) {
       console.error('Logout error:', error);
     }

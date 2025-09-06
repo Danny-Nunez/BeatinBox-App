@@ -108,14 +108,9 @@ const HomeScreen = ({ navigation }) => {
 
   // Load favorite artists when user changes
   useEffect(() => {
-    // Only load favorites when user is fully loaded with an ID
-    if (user && user.id) {
-      loadFavoriteArtists();
-    } else if (user === null) {
-      // User is explicitly null (not logged in)
-      loadFavoriteArtists();
-    }
-    // If user is undefined, it means context is still loading, so do nothing
+    // Always call loadFavoriteArtists when user changes
+    // This will handle both logged-in and logged-out states
+    loadFavoriteArtists();
   }, [user]);
 
   // Set loading to false after both data and favorites are loaded
@@ -125,12 +120,12 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [loading, favoriteArtists.length, artists.length]);
 
-  // Refresh favorite artists when screen comes into focus
+  // Refresh artists when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      if (user) {
-        loadFavoriteArtists();
-      }
+      // Always refresh artists when screen comes into focus
+      // This ensures top artists are shown when user is logged out
+      loadFavoriteArtists();
     });
 
     return unsubscribe;
@@ -207,12 +202,8 @@ const HomeScreen = ({ navigation }) => {
 
   // Load favorite artists when user is logged in, or top artists as fallback
   const loadFavoriteArtists = async () => {
-    // Check if user context is still loading (user might be null initially)
-    if (!user) {
-      return;
-    }
-    
-    if (user.id) {
+    if (user && user.id) {
+      // User is logged in, try to load favorites first
       try {
         const favorites = await getFavoriteArtists();
         
@@ -237,13 +228,13 @@ const HomeScreen = ({ navigation }) => {
         }
       }
     } else {
+      // User is not logged in (user is null or undefined), load top artists
       setFavoriteArtists([]);
-      // Load top artists for users without ID
       try {
         const topArtists = await fetchTopArtists();
         setArtists(topArtists);
       } catch (error) {
-        // Failed to load top artists
+        console.error('Failed to load top artists:', error);
       }
     }
   };
@@ -258,7 +249,7 @@ const HomeScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: '#000' }]}>
-        <View style={styles.loadingContainer}>
+        <View style={[styles.loadingContainer, { paddingBottom: 160 }]}>
           <View style={[styles.logoContainer, { backgroundColor: 'transparent' }]}>
             <LottieView
               ref={lottieRef}

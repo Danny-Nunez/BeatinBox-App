@@ -1110,55 +1110,57 @@ const PlayerBar = ({ color = '#1a1a1a', onFullscreenChange }) => {
         opacity: minimized ? 0 : opacity,
       }]}>
         <View style={{ position: 'relative', width: '100%', height: '100%' }}>
-          {/* Repeat icon */}
-          <TouchableOpacity 
-            onPress={toggleRepeat}
-            style={styles.repeatButton}
-          >
-            <Ionicons 
-              name={repeatMode === 'one' ? "refresh" : "repeat"} 
-              size={32} 
-              color={repeatMode !== 'none' ? "#4CAF50" : "#fff"} 
-            />
-            <Text style={styles.heartText}>
-              {repeatMode === 'none' ? 'Repeat' : repeatMode === 'one' ? 'One' : 'All'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Shuffle icon */}
-          <TouchableOpacity 
-            onPress={toggleShuffle}
-            style={styles.shuffleButton}
-          >
-            <Ionicons 
-              name="shuffle" 
-              size={32} 
-              color={isShuffled ? "#4CAF50" : "#fff"} 
-            />
-            <Text style={styles.heartText}>
-              {isShuffled ? "Shuffled" : "Shuffle"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Heart icon for like/unlike */}
-          {user && (
-                <TouchableOpacity 
-                  onPress={toggleLike}
-                  disabled={isLikeLoading}
-                  style={styles.heartButton}
-                >
-                  <Ionicons 
-                    name={isLiked ? "heart" : "heart-outline"} 
-                    size={32} 
-                    color={isLiked ? "#ff4444" : "#fff"} 
-                  />
-                  <Text style={styles.heartText}>
-                    {isLiked ? "Liked" : "Like"}
-                  </Text>
-                </TouchableOpacity>
-              )}
+          {/* Video Player */}
           <View style={StyleSheet.absoluteFill}>
             {videoPlayer}
+          </View>
+          
+          {/* Floating Action Buttons - Centered Layout */}
+          <View style={styles.floatingButtonsContainer}>
+            <TouchableOpacity 
+              onPress={toggleRepeat}
+              style={styles.floatingButton}
+            >
+              <Ionicons 
+                name={repeatMode === 'one' ? "refresh" : "repeat"} 
+                size={32} 
+                color={repeatMode !== 'none' ? "#4CAF50" : "#fff"} 
+              />
+              <Text style={styles.floatingButtonText}>
+                {repeatMode === 'none' ? 'Repeat' : repeatMode === 'one' ? 'One' : 'All'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={toggleShuffle}
+              style={styles.floatingButton}
+            >
+              <Ionicons 
+                name="shuffle" 
+                size={32} 
+                color={isShuffled ? "#4CAF50" : "#fff"} 
+              />
+              <Text style={styles.floatingButtonText}>
+                {isShuffled ? "Shuffled" : "Shuffle"}
+              </Text>
+            </TouchableOpacity>
+
+            {user && (
+              <TouchableOpacity 
+                onPress={toggleLike}
+                disabled={isLikeLoading}
+                style={styles.floatingButton}
+              >
+                <Ionicons 
+                  name={isLiked ? "heart" : "heart-outline"} 
+                  size={32} 
+                  color={isLiked ? "#ff4444" : "#fff"} 
+                />
+                <Text style={styles.floatingButtonText}>
+                  {isLiked ? "Liked" : "Like"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <TouchableOpacity 
             activeOpacity={1}
@@ -1601,32 +1603,31 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 0,
   },
-  repeatButton: {
+  floatingButtonsContainer: {
     position: 'absolute',
-    right: 170, // Position to the left of the shuffle button
-    bottom: 0,
-    padding: 8,
+    bottom: 5,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
     zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 20,
   },
-  shuffleButton: {
-    position: 'absolute',
-    right: 90, // Position to the left of the heart button
-    bottom: 0,
+  floatingButton: {
     padding: 8,
-    zIndex: 10,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     borderRadius: 20,
+    marginHorizontal: 15,
+    alignItems: 'center',
+    minWidth: 60,
   },
-  heartButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 0, // Position on the same line as the title
-    padding: 8,
-    zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 20,
+  floatingButtonText: {
+    color: '#fff',
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 4,
+    fontWeight: '500',
   },
   fullscreenRepeatButton: {
     position: 'absolute',

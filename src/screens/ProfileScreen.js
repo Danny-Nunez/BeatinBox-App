@@ -8,12 +8,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { CommonActions } from '@react-navigation/native';
+import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
+import TermsConditionsModal from '../components/TermsConditionsModal';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, logout, updateUser } = useAuth();
   const [playlistCount, setPlaylistCount] = useState(0);
   const [favoriteArtists, setFavoriteArtists] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [privacyPolicyVisible, setPrivacyPolicyVisible] = useState(false);
+  const [termsConditionsVisible, setTermsConditionsVisible] = useState(false);
 
   // Auto-dismiss Profile screen if user is not logged in
   useEffect(() => {
@@ -291,14 +295,12 @@ const ProfileScreen = ({ navigation }) => {
 
   const handlePrivacyPolicy = () => {
     setIsMenuVisible(false);
-    // TODO: Navigate to privacy policy screen
-    Alert.alert('Privacy Policy', 'Privacy Policy screen coming soon!');
+    setPrivacyPolicyVisible(true);
   };
 
   const handleTermsConditions = () => {
     setIsMenuVisible(false);
-    // TODO: Navigate to terms & conditions screen
-    Alert.alert('Terms & Conditions', 'Terms & Conditions screen coming soon!');
+    setTermsConditionsVisible(true);
   };
 
   const handleRemoveArtist = async (artist) => {
@@ -535,6 +537,18 @@ const ProfileScreen = ({ navigation }) => {
           </Modal>
         </SafeAreaView>
       </LinearGradient>
+      
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyModal
+        visible={privacyPolicyVisible}
+        onClose={() => setPrivacyPolicyVisible(false)}
+      />
+      
+      {/* Terms & Conditions Modal */}
+      <TermsConditionsModal
+        visible={termsConditionsVisible}
+        onClose={() => setTermsConditionsVisible(false)}
+      />
     </View>
   );
 };
